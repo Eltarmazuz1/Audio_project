@@ -53,7 +53,10 @@ class ESC_50(Dataset):
             freqm = torchaudio.transforms.FrequencyMasking(self.freq_mask)
             timem = torchaudio.transforms.TimeMasking(self.time_mask)
             
-            fbank = torch.transpose(self.x[index], 0, 1)
+            # Omer change
+            # fbank = torch.transpose(self.x[index], 0, 1)
+            fbank = torch.transpose(torch.tensor(self.x[index]), 0, 1)
+           
             fbank = fbank.unsqueeze(0)
             fbank = freqm(fbank)
             fbank = timem(fbank)

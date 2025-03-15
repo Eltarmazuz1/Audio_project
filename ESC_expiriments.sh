@@ -7,3 +7,12 @@ python3 main.py --data_path dataset/ --is_AST True --dataset_name 'ESC-50' --met
 
 # Linear
 python3 main.py --data_path dataset/ --is_AST True --dataset_name 'ESC-50' --method 'linear' 
+
+# Full finetuning
+python3 main.py --data_path dataset/ --is_AST True --dataset_name 'ESC-50' --method 'full-FT' 
+
+# LoRA
+python3 main.py --data_path dataset/ --is_AST True --dataset_name 'ESC-50' --method 'LoRA'
+
+# Pref-T 24
+python3 main.py --data_path dataset/ --is_AST True --dataset_name 'ESC-50' --method 'prefix-tuning'

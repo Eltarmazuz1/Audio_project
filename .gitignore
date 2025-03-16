@@ -1,3 +1,7 @@
 .DS_Store
 dataset/ESC-50
-dataset/urbansound8k
+dataset/UrbanSound8K
+
+
+*.err
+*.out

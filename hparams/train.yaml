@@ -31,7 +31,7 @@ epochs_FSC_WAV: 50
 
 max_len_AST_ESC: 500
 num_classes_ESC: 50
-batch_size_ESC: 32
+batch_size_ESC: 16 #32
 epochs_ESC_AST: 50
 epochs_ESC: 50
 

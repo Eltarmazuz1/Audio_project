@@ -1,1 +1,3 @@
 .DS_Store
+dataset/ESC-50
+dataset/urbansound8k

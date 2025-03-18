@@ -1,8 +1,8 @@
 #! /bin/sh
 
-#SBATCH --job-name=linear_urban
-#SBATCH --output=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/linear.out # redirect stdout
-#SBATCH --error=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/linear.err # redirect stderr
+#SBATCH --job-name=lora_urban
+#SBATCH --output=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/lora_urban.out # redirect stdout
+#SBATCH --error=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/lora_urban.err # redirect stderr
 #SBATCH --partition=studentkillable  # (see resources section)
 #SBATCH --account=gpu-students
 #SBATCH --time=500 # max time (minutes)
@@ -17,6 +17,6 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 echo "Start"
 # unset PYTORCH_CUDA_ALLOC_CONF
 # export PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb:128"
-python3 main.py --data_path dataset/ --is_AST True --dataset_name 'urbansound8k' --method 'linear'
+python3 main.py --data_path dataset/ --is_AST True --dataset_name 'urbansound8k' --method 'LoRA'
 echo "Finish"
 

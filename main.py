@@ -10,6 +10,7 @@ import torch
 from torch.optim import AdamW
 from src.AST import AST
 from src.AST_LoRA import AST_LoRA, AST_LoRA_ablation
+from src.AST_freq_LoRA import AST_LoRA_freq
 from src.AST_adapters import AST_adapter, AST_adapter_ablation
 from src.Wav2Vec_adapter import Wav2Vec, Wav2Vec_adapter
 from src.AST_prompt_tuning import AST_Prefix_tuning, PromptAST, Prompt_config
@@ -50,7 +51,7 @@ def get_args_parser():
     
     parser.add_argument('--dataset_name', type= str, choices = ['FSC', 'ESC-50', 'urbansound8k', 'GSC', 'IEMOCAP'])
     parser.add_argument('--method', type= str, default='adapter',choices = ['linear', 'full-FT', 'adapter', 'prompt-tuning', 'prefix-tuning', 
-                                                          'LoRA', 'BitFit', 'Dense-MoA', 'Soft-MoA'])
+                                                          'LoRA', 'BitFit', 'Dense-MoA', 'Soft-MoA', 'LoRA_freq'])
     # Adapter params.
     parser.add_argument('--seq_or_par', default = 'parallel', choices=['sequential','parallel'])
     parser.add_argument('--reduction_rate_adapter', type= int, default= 96)
@@ -247,6 +248,9 @@ def main(args):
                 lr = train_params['lr_FitBit']
             elif method == 'LoRA':
                 model = AST_LoRA(max_length= max_len_AST, num_classes= num_classes, final_output= final_output, rank= args.reduction_rate_lora, alpha= args.alpha_lora, model_ckpt= args.model_ckpt_AST).to(device)
+                lr = train_params['lr_LoRA']
+            elif method == 'LoRA_freq':
+                model = AST_LoRA_freq(max_length= max_len_AST, num_classes= num_classes, final_output= final_output, rank= args.reduction_rate_lora, alpha= args.alpha_lora, model_ckpt= args.model_ckpt_AST).to(device)
                 lr = train_params['lr_LoRA']
             elif method == 'prefix-tuning':
                 model = AST_Prefix_tuning(max_length= max_len_AST, num_classes= num_classes, final_output= final_output, num_tokens= args.prompt_len_pt, patch_size= train_params['patch_size'], hidden_size= train_params['hidden_size'], model_ckpt= args.model_ckpt_AST).to(device)

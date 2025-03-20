@@ -8,53 +8,100 @@ from transformers.models.audio_spectrogram_transformer.modeling_audio_spectrogra
 )
 from typing import Optional, Tuple, Union
 
+def init_ssf_scale_shift(blocks, dim):
+    """
+    SSF: Scaling & Shifting Your Features: A New Baseline for Efficient Model Tuning
+    https://github.com/dongzelian/SSF/blob/main/models/vision_transformer.py
+    """
+    scale = nn.Parameter(torch.ones(blocks, dim))
+    shift = nn.Parameter(torch.zeros(blocks, dim))
+
+    nn.init.normal_(scale, mean=1, std=.02)
+    nn.init.normal_(shift, std=.02)
+
+    return scale, shift
+
+def ssf_ada(x, scale, shift):
+    """
+    SSF: Scaling & Shifting Your Features: A New Baseline for Efficient Model Tuning
+    https://github.com/dongzelian/SSF/blob/main/models/vision_transformer.py
+    """
+    assert scale.shape == shift.shape
+    if x.shape[-1] == scale.shape[0]:
+        return x * scale + shift
+    elif x.shape[1] == scale.shape[0]:
+        return x * scale.view(1, -1, 1, 1) + shift.view(1, -1, 1, 1)
+    else:
+        raise ValueError('the input tensor shape does not match the shape of the scale factor.')
+        
 # FreqFit Module
 class FreqFit(nn.Module):
     def __init__(self, dim, h=14, w=8):
         super().__init__()
-        self.filter_weight = nn.Parameter(torch.randn(h, w, dim, 2, dtype=torch.float32) * 0.02)
+        self.dim = dim
+        self.h = h
+        self.w = w
+        self.block = 8
+        # self.filter_weight = nn.Parameter(torch.randn(h, w, dim, 2, dtype=torch.float32) * 0.02)
         self.scale = nn.Parameter(torch.ones(dim))
         self.shift = nn.Parameter(torch.zeros(dim))
         nn.init.normal_(self.scale, mean=1, std=.02)
         nn.init.normal_(self.shift, std=.02)
+        self.complex_weight = nn.Parameter(torch.randn(self.block, h, dim, 2, dtype=torch.float32) * 0.02)
+        self.ssf_scale, self.ssf_shift = init_ssf_scale_shift(self.block, dim)
     
     def forward(self, x):
-        B, N, C = x.shape
-        # a = b = int(math.sqrt(N))  # Assuming square spatial dimensions
-        def infer_spatial_dims(N):
-            a = int(math.sqrt(N))
-            while N % a != 0 and a > 1:
-                a -= 1  # Find the largest divisor of N closest to sqrt(N)
-            b = N // a  # Ensure a * b = N
-            return a, b
-
-        a, b = infer_spatial_dims(N)
-
-        print(f"x.shape before view: {x.shape}, expected: ({B}, {a}, {b}, {C})")
-        x = x.view(B, a, b, C).to(torch.float32)
+        B, a, C = x.shape
+        x = x.to(torch.float32)
         res = x
-        x = torch.fft.rfft2(x, dim=(1, 2), norm='ortho')
-        # weight = torch.view_as_complex(self.filter_weight.squeeze())
-        # Ensure weight matches x.shape
-        # weight = torch.view_as_complex(self.filter_weight[:a, :b, :C].contiguous())
-        # Resize weight to match x.shape[2] (24) instead of 8
-        # weight = torch.view_as_complex(self.filter_weight[:, :x.shape[2], :C].contiguous())
-        # weight = torch.view_as_complex(self.filter_weight[:x.shape[1], :x.shape[2], :C].contiguous())
-        # Interpolate weight along dimension 2 to match x.shape[2]
-        weight = torch.nn.functional.interpolate(
-            # self.filter_weight.permute(2, 0, 1).unsqueeze(0),  # (1, 768, 10, 8)
-            self.filter_weight.permute(3, 2, 0, 1).unsqueeze(0),
-            size=(10, x.shape[2]),  # Resize spatial dimension
-            mode="bilinear", align_corners=False
-        ).squeeze(0).permute(1, 2, 0)  # Back to (10, 24, 768)
-        weight = torch.view_as_complex(weight.contiguous())
-
-        print(f"x.shape: {x.shape}, weight.shape: {weight.shape}")  # Debugging line
-        x = x * weight
-        x = torch.fft.irfft2(x, s=(a, b), dim=(1, 2), norm='ortho')
-        x = x * self.scale + self.shift
+        dimension_fourie =  1
+        x = torch.fft.rfft(x, dim=dimension_fourie, norm='ortho')
+        weight = torch.view_as_complex(self.complex_weight[0].squeeze())
+        # x = x * weight
+        x = x[:, :min(a, weight.shape[0]), :] * weight[:min(a, weight.shape[0]), :]
+        x = torch.fft.irfft(x, n=a, dim=dimension_fourie, norm='ortho')
+        x = ssf_ada(x, self.ssf_scale[0], self.ssf_shift[0])
         x = x + res
-        return x.reshape(B, N, C)
+        return x
+
+
+    # def forward(self, x):
+    #     B, N, C = x.shape
+    #     # a = b = int(math.sqrt(N))  # Assuming square spatial dimensions
+    #     def infer_spatial_dims(N):
+    #         a = int(math.sqrt(N))
+    #         while N % a != 0 and a > 1:
+    #             a -= 1  # Find the largest divisor of N closest to sqrt(N)
+    #         b = N // a  # Ensure a * b = N
+    #         return a, b
+
+    #     a, b = infer_spatial_dims(N)
+
+    #     print(f"x.shape before view: {x.shape}, expected: ({B}, {a}, {b}, {C})")
+    #     x = x.view(B, a, b, C).to(torch.float32)
+    #     res = x
+    #     x = torch.fft.rfft2(x, dim=(1, 2), norm='ortho')
+    #     # weight = torch.view_as_complex(self.filter_weight.squeeze())
+    #     # Ensure weight matches x.shape
+    #     # weight = torch.view_as_complex(self.filter_weight[:a, :b, :C].contiguous())
+    #     # Resize weight to match x.shape[2] (24) instead of 8
+    #     # weight = torch.view_as_complex(self.filter_weight[:, :x.shape[2], :C].contiguous())
+    #     # weight = torch.view_as_complex(self.filter_weight[:x.shape[1], :x.shape[2], :C].contiguous())
+    #     # Interpolate weight along dimension 2 to match x.shape[2]
+    #     weight = torch.nn.functional.interpolate(
+    #         # self.filter_weight.permute(2, 0, 1).unsqueeze(0),  # (1, 768, 10, 8)
+    #         self.filter_weight.permute(3, 2, 0, 1).unsqueeze(0),
+    #         size=(10, x.shape[2]),  # Resize spatial dimension
+    #         mode="bilinear", align_corners=False
+    #     ).squeeze(0).permute(1, 2, 0)  # Back to (10, 24, 768)
+    #     weight = torch.view_as_complex(weight.contiguous())
+
+    #     print(f"x.shape: {x.shape}, weight.shape: {weight.shape}")  # Debugging line
+    #     x = x * weight
+    #     x = torch.fft.irfft2(x, s=(a, b), dim=(1, 2), norm='ortho')
+    #     x = x * self.scale + self.shift
+    #     x = x + res
+    #     return x.reshape(B, N, C)
 
 @dataclass
 class LoRA_config:

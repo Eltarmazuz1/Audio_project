@@ -1,8 +1,8 @@
 #! /bin/sh
 
-#SBATCH --job-name=lora_urban
-#SBATCH --output=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/lora_urban.out # redirect stdout
-#SBATCH --error=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/lora_urban.err # redirect stderr
+#SBATCH --job-name=lora_freq_urban
+#SBATCH --output=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/lora_freq_urban.out # redirect stdout
+#SBATCH --error=/home/yandex/MLWG2024/omertalmi/audio/Audio_Project/lora_freq_urban.err # redirect stderr
 #SBATCH --partition=studentkillable  # (see resources section)
 #SBATCH --account=gpu-students
 #SBATCH --time=500 # max time (minutes)

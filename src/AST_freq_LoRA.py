@@ -57,8 +57,46 @@ class FreqFit(nn.Module):
         dimension_fourie =  1
         x = torch.fft.rfft(x, dim=dimension_fourie, norm='ortho')
         weight = torch.view_as_complex(self.complex_weight[0].squeeze())
-        # x = x * weight
-        x = x[:, :min(a, weight.shape[0]), :] * weight[:min(a, weight.shape[0]), :]
+
+        # Ensure weight matches x.shape[1]
+        # weight = torch.nn.functional.interpolate(weight.unsqueeze(0).real, size=a, mode='linear').squeeze(0) + \
+        #  1j * torch.nn.functional.interpolate(weight.unsqueeze(0).imag, size=a, mode='linear').squeeze(0)
+
+        # Ensure weight shape matches x.shape[1] (a)
+        # weight_real = torch.nn.functional.interpolate(weight.unsqueeze(0).real, size=a, mode='linear').squeeze(0)
+        # weight_imag = torch.nn.functional.interpolate(weight.unsqueeze(0).imag, size=a, mode='linear').squeeze(0)
+        # weight = torch.complex(weight_real, weight_imag)
+        # print("x ")
+        # print(x.shape)
+
+        # print("weight ")
+        # print(weight.shape)
+
+        # print("a ")
+        # print(a)
+        # print("C ")
+        # print(C)
+        # weight_real = torch.nn.functional.interpolate(weight.unsqueeze(0).unsqueeze(0).real, size=(a, C), mode='bilinear', align_corners=False).squeeze(0)
+        # weight_imag = torch.nn.functional.interpolate(weight.unsqueeze(0).unsqueeze(0).imag, size=(a, C), mode='bilinear', align_corners=False).squeeze(0)
+        weight_real = torch.nn.functional.interpolate(weight.unsqueeze(0).unsqueeze(0).real, size=(x.shape[1], C), mode='bilinear', align_corners=False).squeeze(0)
+        weight_imag = torch.nn.functional.interpolate(weight.unsqueeze(0).unsqueeze(0).imag, size=(x.shape[1], C), mode='bilinear', align_corners=False).squeeze(0)
+       
+        # print("weight_real ")
+        # print(weight_real.shape)
+        # print("weight_imag ")
+        # print(weight_imag.shape)
+        weight = torch.complex(weight_real, weight_imag)
+        # print("weight ")
+        # print(weight.shape)
+        # Reshape weight to match x.shape
+        # weight = weight.unsqueeze(0).expand(B, -1, -1)  # Ensure same batch size
+        weight = weight.expand(B, -1, -1)  # Ensure same batch size
+        # print("weight ")
+        # print(weight.shape)
+        # print("x ")
+        # print(x.shape)
+        x = x * weight
+        # x = x[:, :min(a, weight.shape[0]), :] * weight[:min(a, weight.shape[0]), :]
         x = torch.fft.irfft(x, n=a, dim=dimension_fourie, norm='ortho')
         x = ssf_ada(x, self.ssf_scale[0], self.ssf_shift[0])
         x = x + res

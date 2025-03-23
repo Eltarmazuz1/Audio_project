@@ -80,10 +80,76 @@ an example bibliography (\texttt{custom.bib}),
 and the bibliography for the ACL Anthology (\texttt{anthology.bib}).
 
 \section{Related Work}
-AST
-\section{Method}
+One of the big breakthroughs in deep learning for vision tasks was the introduction of the Vision Transformer (ViT), which builds upon the transformer architecture (Vaswani et al., 2017). Unlike convolutional neural networks (CNNs), ViT processes images as sequences of patches, leveraging self-attention mechanisms to model long-range dependencies across an image (Dosovitskiy et al., 2020). This shift in paradigm has led to competitive or superior performance compared to CNNs, especially when trained on large datasets. ViT’s success has also extended beyond vision, inspiring models such as the Audio Spectrogram Transformer (AST) for audio classification, demonstrating the versatility of transformer-based architectures in various modalities (Wu et al., 2023) (arxiv.org).
 
-Linear Probing
+
+\section{Method}
+\subsection{Overview of Parameter-efficient Transfer Learning Methods}
+
+We now introduce the PETL techniques we used in our experiments: LoRA, Pref-T 24, Linear probing, adapter tuning, and full fine-tuning.
+
+\subsubsection{Full Fine-Tuning}
+Full fine-tuning (FFT) adapts the entire pre-trained model to each downstream task. This approach ensures optimal performance by adjusting all model parameters, but it requires significant computational resources and storage. Fine-tuning the full model is often impractical for resource-constrained environments, particularly in multi-task learning scenarios where maintaining separate models for each task becomes infeasible.
+
+\subsubsection{Pref-T 24 (Prefix-Tuning)}
+Prefix-tuning inserts a set of $p$ learnable continuous embeddings of dimension $d$ (i.e., prompts) into the keys and values of the MHSA block at every layer. Pref-T 24 follows the deep prompt-tuning (DPT) paradigm, where prompts are uniformly prepended to each transformer layer instead of just the first layer, as in shallow prompt-tuning (SPT). By strategically placing the prefix embeddings throughout the network, Pref-T 24 enhances the model’s ability to generalize across tasks while maintaining parameter efficiency.
+
+\subsubsection{Linear Probing}
+Linear probing is a lightweight fine-tuning method where only the classification head (i.e., the final linear layer) of the pre-trained model is updated, while the rest of the model remains frozen. This approach significantly reduces computational cost and prevents catastrophic forgetting by preserving the original model’s learned representations.
+
+Given an input sequence $X_{\text{in}}$, the output of the frozen transformer layers is represented as:
+
+\begin{equation}
+X_{\text{out}} = \text{Transformer}(X_{\text{in}})
+\end{equation}
+
+A task-specific linear classification head $W_{\text{lin}} \in \mathbb{R}^{d \times C}$, where $C$ is the number of output classes, is then applied to obtain the final predictions:
+
+\begin{equation}
+\hat{y} = X_{\text{out}} W_{\text{lin}}
+\end{equation}
+
+Although linear probing is highly efficient and requires only a small number of trainable parameters, its performance is often inferior to other PETL methods such as LoRA or adapter-based tuning, especially for tasks requiring deeper model adaptation. However, it remains a strong baseline for transfer learning scenarios where computational resources are limited.
+
+\subsubsection{LoRA (Low-Rank Adaptation)}
+LoRA introduces trainable low-rank matrices into transformer layers to approximate the weight updates. For a pre-trained weight matrix $W \in \mathbb{R}^{d \times d_k}$, LoRA represents its update with a low-rank decomposition $W + \Delta W = W + AB$, where $A \in \mathbb{R}^{d \times r}$, $B \in \mathbb{R}^{r \times d}$, and $r \ll d$. LoRA typically applies this update to the query and value projection matrices, $W_q$ and $W_v$, in the Multi-Head Self-Attention (MHSA) sub-layer. The computation of query and value matrices follows:
+
+\begin{equation}
+Q/V = X_{\text{in}} W_{q/v} + s \cdot X_{\text{in}} A_{q/v} B_{q/v}
+\end{equation}
+
+where $s$ is a tunable scalar hyperparameter. This method allows efficient adaptation of the pre-trained model by introducing a minimal number of trainable parameters, thereby reducing storage requirements.
+
+\subsubsection{Bottleneck Adapter: Pfeiffer and Houlsby Configurations}
+Adapters are small, trainable modules added to transformer layers, following a bottleneck structure. The input sequence of hidden dimension $d$ is first down-projected into a low-dimensional space using $W_{\text{down}} \in \mathbb{R}^{d \times r}$, followed by a non-linear activation function $f(\cdot)$, and then up-projected back to the original dimension $d$ using $W_{\text{up}} \in \mathbb{R}^{r \times d}$. This design minimizes additional parameters while enabling task-specific adaptation.
+
+Adapters can be placed in different configurations:
+\begin{itemize}
+    \item \textbf{Pfeiffer Configuration}: The adapter is inserted only after the feedforward (FF) block.
+    \item \textbf{Houlsby Configuration}: The adapter is placed after both the MHSA and FF blocks, effectively doubling the number of trainable parameters compared to the Pfeiffer configuration.
+\end{itemize}
+
+For the Pfeiffer adapter, the output is computed as:
+
+\begin{equation}
+X_{\text{out}} = X̂ + X_{\text{FF}} + f(X̂ W_{\text{down}}) W_{\text{up}}
+\end{equation}
+
+where $X_{\text{FF}}$ is the output of the FFN layer.
+
+\subsubsection{Conformer Adapter (Proposed)}
+The standard bottleneck adapter struggles with speech tasks due to its linear nature. To address this, we propose a \textbf{Conformer Adapter}, which integrates the depthwise convolution module from the Conformer architecture. This module captures local spatial correlations and reduces the number of parameters compared to traditional CNNs.
+
+The Conformer Adapter follows this pipeline:
+\begin{enumerate}
+    \item \textbf{Pointwise Down Convolution}: Projects the input to a hidden dimension of $2r$.
+    \item \textbf{Gated Linear Unit (GLU)}: Reduces the hidden dimension to $r$.
+    \item \textbf{Depthwise Convolution}: Applies depthwise convolution with a kernel size $k$, followed by Batch Normalization and Swish activation.
+    \item \textbf{Pointwise Up Convolution}: Projects the hidden representation back to dimension $d$.
+\end{enumerate}
+
+By leveraging depthwise convolutions, the Conformer Adapter significantly improves performance on speech tasks while using only 0.29\% of the parameters compared to full fine-tuning.
+
 
 
 \section{Document Body}

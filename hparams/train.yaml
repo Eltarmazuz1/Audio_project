@@ -37,7 +37,7 @@ epochs_ESC: 50
 
 max_len_AST_US8K: 400
 num_classes_US8K: 10
-batch_size_US8K: 32
+batch_size_US8K: 16
 epochs_US8K_AST: 30
 epochs_US8K: 30
 

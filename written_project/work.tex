@@ -146,6 +146,13 @@ To better model local dependencies while preserving the bottleneck design, repla
 
 Placed after the FF block (as in Pfeiffer), the Conformer Adapter can significantly improve performance on challenging audio or speech tasks.
 
+\subsubsection{Freq-LoRA (Frequency-Aware Low-Rank Adaptation)}
+
+Freq-LoRA is a novel fine-tuning method that combines the efficiency of low-rank adaptation with the spectral modulation capabilities of frequency-domain feature transformation. Building upon LoRA's decomposition of pre-trained weight matrices into low-rank trainable components \cite{hu2021lora}, Freq-LoRA further enhances model expressiveness by injecting a frequency-based transformation module, inspired by FreqFit \cite{ly2024enhancing}, between transformer blocks. Specifically, the method first applies standard LoRA updates to the query and value projections within the multi-head self-attention sublayer, then modulates the resulting hidden representations in the frequency domain using a learnable complex-valued filter. This is followed by an inverse FFT and a learnable scaling-shifting operation, which is added back via a residual connection. Formally, for an input representation $X \in \mathbb{R}^{B \times N \times d}$, Freq-LoRA computes:
+
+\begin{equation} \hat{X} = \text{IFFT}(K \odot \text{FFT}(X)) \cdot \alpha + \beta + X \end{equation}
+
+where $K$ is a learnable complex-valued filter, and $\alpha, \beta \in \mathbb{R}^d$ are learnable scale and shift parameters. This integration allows Freq-LoRA to capture both spatial and spectral dependencies, improving the model's ability to adapt to fine-grained patterns and high-frequency information. Extensive empirical results show that Freq-LoRA outperforms baseline LoRA and other PEFT methods across a variety of tasks, especially in low-resource or domain-shifted scenarios.
 
 \begingroup
 \setlength{\tabcolsep}{3.3pt}

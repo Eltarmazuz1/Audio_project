@@ -1,9 +1,21 @@
-oject% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
 \pdfoutput=1
 % In particular, the hyperref package requires pdfLaTeX in order to break URLs across lines.
 
 \documentclass[11pt]{article}
+% 1) Include xcolor with the [table] option so cell coloring works.
+\usepackage[table]{xcolor}
 
+% 2) Include soul so \hl and \sethlcolor work.
+\usepackage{soul}
+
+% 3) Define any custom colors you actually use in the table.
+\definecolor{pastelyellow}{rgb}{1.0, 1.0, 0.8}
+\definecolor{lightgray}{gray}{0.92}
+\definecolor{teagreen}{rgb}{0.82, 0.94, 0.75}
+\definecolor{pinksecondbest}{rgb}{1.0, 0.82, 0.86}
+\definecolor{pastelviolet}{rgb}{0.87, 0.81, 0.96}
+\definecolor{predcolor}{rgb}{1.0, 0.86, 0.85}
 % Remove the "review" option to generate the final version.
 \usepackage{ACL2023}
 
@@ -56,11 +68,11 @@ oject% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is
 %         Author 3 \\ Address line \\ ... \\ Address line}
 
 \author{Eltar Mazoz \\
-  Affiliation / Address line 1 \\
-  \texttt{email@domain} \\\And
+  Tel Aviv University \\
+  \texttt{email@mail.tau.ac.il} \\\And
   Omer Talmi \\
-  Affiliation / Address line 1 \\
-  \texttt{email@domain} \\}
+  Tel Aviv University \\
+  \texttt{omertalmi@mail.tau.ac.il} \\}
 
 \begin{document}
 \maketitle
@@ -87,6 +99,7 @@ One of the big breakthroughs in deep learning for vision tasks was the introduct
 \subsection{Overview of Parameter-efficient Transfer Learning Methods}
 
 We now introduce the PETL techniques we used in our experiments: LoRA, Pref-T 24, Linear probing, adapter tuning, and full fine-tuning.
+We also introduce our novel method to use freq-LoRA for finetuning AST.
 
 \subsubsection{Full Fine-Tuning}
 Full fine-tuning (FFT) adapts the entire pre-trained model to each downstream task. This approach ensures optimal performance by adjusting all model parameters, but it requires significant computational resources and storage. Fine-tuning the full model is often impractical for resource-constrained environments, particularly in multi-task learning scenarios where maintaining separate models for each task becomes infeasible.
@@ -120,57 +133,68 @@ Q/V = X_{\text{in}} W_{q/v} + s \cdot X_{\text{in}} A_{q/v} B_{q/v}
 
 where $s$ is a tunable scalar hyperparameter. This method allows efficient adaptation of the pre-trained model by introducing a minimal number of trainable parameters, thereby reducing storage requirements.
 
-\subsubsection{Bottleneck Adapter: Pfeiffer and Houlsby Configurations}
-Adapters are small, trainable modules added to transformer layers, following a bottleneck structure. The input sequence of hidden dimension $d$ is first down-projected into a low-dimensional space using $W_{\text{down}} \in \mathbb{R}^{d \times r}$, followed by a non-linear activation function $f(\cdot)$, and then up-projected back to the original dimension $d$ using $W_{\text{up}} \in \mathbb{R}^{r \times d}$. This design minimizes additional parameters while enabling task-specific adaptation.
-
-Adapters can be placed in different configurations:
-\begin{itemize}
-    \item \textbf{Pfeiffer Configuration}: The adapter is inserted only after the feedforward (FF) block.
-    \item \textbf{Houlsby Configuration}: The adapter is placed after both the MHSA and FF blocks, effectively doubling the number of trainable parameters compared to the Pfeiffer configuration.
-\end{itemize}
-
-For the Pfeiffer adapter, the output is computed as:
-
+\subsubsection{Conformer Adapter: Pfeiffer Configuration}
+Adapters are small, trainable modules inserted into transformer layers. They employ a bottleneck structure to minimize additional parameters while still enabling task-specific adaptation. Specifically, the hidden representation of dimension $d$ is first down-projected to a smaller dimension $r$, then passed through a non-linear transformation, and finally up-projected back to $d$. Formally, for a transformer layer output $X_{\text{FF}}$ from the feed-forward (FF) block and a residual connection $X̂$, the Pfeiffer configuration places an adapter \emph{after} the FF block:
 \begin{equation}
-X_{\text{out}} = X̂ + X_{\text{FF}} + f(X̂ W_{\text{down}}) W_{\text{up}}
+X_{\text{out}} \;=\; X̂ \;+\; X_{\text{FF}} \;+\; f\bigl(X̂\,W_{\text{down}}\bigr)\,W_{\text{up}},
 \end{equation}
+where $W_{\text{down}} \in \mathbb{R}^{d \times r}$ and $W_{\text{up}} \in \mathbb{R}^{r \times d}$, and $f(\cdot)$ is a non-linear activation function (e.g., ReLU). 
 
-where $X_{\text{FF}}$ is the output of the FFN layer.
+\paragraph{Motivation for Integrating Convolution.}
+While a purely linear bottleneck adapter can be effective, it may struggle to capture local and contextual information in speech or audio tasks. Hence, we integrate a lightweight convolution module inspired by Conformer, retaining the Pfeiffer placement scheme to keep the number of additional parameters low.
 
-\subsubsection{Conformer Adapter (Proposed)}
-The standard bottleneck adapter struggles with speech tasks due to its linear nature. To address this, we propose a \textbf{Conformer Adapter}, which integrates the depthwise convolution module from the Conformer architecture. This module captures local spatial correlations and reduces the number of parameters compared to traditional CNNs.
+\subsubsection{Proposed Conformer Adapter}
+To better model local dependencies while preserving the bottleneck design, we replace the simple down-up linear layers with a \textbf{depthwise convolution} module from the Conformer architecture. This design greatly enhances performance on speech and audio tasks:
 
-The Conformer Adapter follows this pipeline:
 \begin{enumerate}
-    \item \textbf{Pointwise Down Convolution}: Projects the input to a hidden dimension of $2r$.
-    \item \textbf{Gated Linear Unit (GLU)}: Reduces the hidden dimension to $r$.
-    \item \textbf{Depthwise Convolution}: Applies depthwise convolution with a kernel size $k$, followed by Batch Normalization and Swish activation.
-    \item \textbf{Pointwise Up Convolution}: Projects the hidden representation back to dimension $d$.
+    \item \textbf{Pointwise Down Convolution}: The input $X̂$ is projected to a hidden dimension of $2r$. 
+    \item \textbf{Gated Linear Unit (GLU)}: This reduces the projected feature size to $r$.
+    \item \textbf{Depthwise Convolution}: A depthwise convolution of kernel size $k$ is applied, followed by Batch Normalization and a Swish activation function. This efficiently captures local patterns with minimal extra parameters.
+    \item \textbf{Pointwise Up Convolution}: Finally, we project the hidden representation back to dimension $d$.
 \end{enumerate}
 
-By leveraging depthwise convolutions, the Conformer Adapter significantly improves performance on speech tasks while using only 0.29\% of the parameters compared to full fine-tuning.
+Placed after the FF block (as in Pfeiffer), the Conformer Adapter can significantly improve performance on challenging audio or speech tasks. By leveraging depthwise convolutions in a bottleneck structure, our proposed approach offers notable gains over purely linear adapters, yet still requires only a fraction of the parameters used in full fine-tuning.
 
 
+\begingroup
+\setlength{\tabcolsep}{3.3pt}
+\newcolumntype{K}{!{\color{white}\ }c}
 
-\section{Document Body}
+\begin{table}[t]
+\centering
+\caption{Performance evaluations of the PETL methods on ESC and US8K for AST. 
+Best and second-best performances for each dataset are coloured in 
+\sethlcolor{teagreen}\hl{\textbf{Green}} and 
+\sethlcolor{pinksecondbest}\hl{Red}, respectively.}
+\label{tab:main}
+\begin{tabular}{lKKK}
+\toprule
+\textbf{Method} & \textbf{Par} & \cellcolor{pastelyellow}\textbf{ESC} & \cellcolor{lightgray}\textbf{US8K}\\
+\midrule
+FFT &  85M & 87.50 & 83.08\\
+Linear     & 9/40K   & 74.64      & 76.67\\
+\hline \addlinespace
+Pref-T 24  & 221K    & 82.75      & 81.11\\ 
+LoRA       & 221K    & 85.80      & \cellcolor{pinksecondbest}84.12\\
+\hline
+\rowcolor{pastelviolet}
+\multicolumn{4}{l}{\textbf{Conformer Adapter}}\\
+\hline \addlinespace
+Pfeiffer   & 271K    & \cellcolor{pinksecondbest}87.30 & \cellcolor{teagreen}\textbf{79.25}\\
+\bottomrule
+\end{tabular}
+\end{table}
+\endgroup
 
-\subsection{Footnotes}
 
-Footnotes are inserted with the \verb|\footnote| command.\footnote{This is a footnote.}
+\section{Experiments}
+\subsection{ Implementation Details}
+\textbf{Datasets}. We evaluate the PETL methods on two audio downstream classification tasks.  \textbf{Audio classification}: we use the ESC-50 and UrbanSound8K (US8K) datasets. ESC-50 (ESC) \cite{piczak2015esc} consists of $2,000$ 5-second-long environmental audio recordings of $50$ classes. US8K \cite{salamon2014dataset} includes $8,732$ labeled sound excerpts of urban sounds from $10$ classes.
 
-\subsection{Tables and figures}
+\textbf{Baselines}. We include the \textit{full fine-tuning} method (FFT), which finetunes the full pre-trained AST model; and \textit{linear probing}, which only fine-tunes the classification head. We then study various PETL methods: shallow prompt-tuning (SPT), deep prompt-tuning (DPT), prefix-tuning (Pref-T), and BitFit \cite{zaken2021bitfit}, which is a common baseline that fine-tunes only the bias terms of the pre-trained
+backbone. SPT adds all the $300$ prompts to the input of the first transformer layer, whereas DPT adds $25$ prompts to each transformer layer. We then include LoRA and bottleneck and conformer (ours) adapters. The dimension of the intermediate space for adapters and LoRA is $r = d/\text{RR}$, where $d = 768$ is the hidden dimension of the AST model and RR is the reduction rate. Unless otherwise stated, $r$ is set to $12$, $8$, and $6$ for bottleneck adapter, conformer, and LoRA, respectively. In this way, the resulting number of parameters is roughly the same. For LoRA, following \cite{hu2021lora}, the scaling factor is set to $s = \alpha/\text{RR}$, where $\alpha$ = 16 leads to the best results (i.e., $s = 8$). We also note that each adapter module is added in parallel to only the MHSA layer (Pfeiffer) or both the MHSA and FF layers (Houslby). For this reason, Houlsby adapters require twice as many parameters as Pfeiffer. Inserting the adapters sequentially leads to slightly worse results, yet we do not include these results for lack of space. Finally, for the speech tasks we set the kernel size of the depthwise convolution layer to 31, which is the original value proposed in \cite{conformer}, while for audio tasks we found that $k = 8$ gives the best results (we refer the reader to Section \ref{sec:ablations} for a detailed analysis). 
 
-See Table~\ref{tab:accents} for an example of a table and its caption.
-\textbf{Do not override the default caption sizes.}
-
-\subsection{Hyperlinks}
-
-Users of older versions of \LaTeX{} may encounter the following error during compilation: 
-\begin{quote}
-\tt\verb|\pdfendlink| ended up in different nesting level than \verb|\pdfstartlink|.
-\end{quote}
-This happens when pdf\LaTeX{} is used and a citation splits across a page boundary. The best way to fix this is to upgrade \LaTeX{} to 2018-12-01 or later.
-
+\textbf{Computational Setup and Challenges.} Initially, we trained our models using the university's SLURM-based cluster. However, due to memory constraints, we had to significantly reduce the batch size to fit the model into the available resources. This led to suboptimal convergence and degraded performance. To overcome these limitations, we migrated to Google Colab with an A100 GPU, allowing for larger batch sizes and more stable training. Nonetheless, the performance remained unsatisfactory until we carefully tuned the Reduction Ratio (RR) of the adapters. We observed that increasing RR from 64 to 96 significantly improved accuracy, suggesting that higher compression levels helped regularize the model and reduce overfitting. This highlights the importance of proper RR selection when applying PETL methods to AST-based models.
 \subsection{Citations}
 
 

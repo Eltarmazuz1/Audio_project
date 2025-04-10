@@ -49,7 +49,7 @@
 %
 % and set <dim> to something 5cm or larger.
 
-\title{Audio Project}
+\title{Parameter-Efficient Transfer Learning of Audio Spectrogram Transformers}
 
 % Author information can be set in various styles:
 % For several authors from the same institution:
@@ -97,10 +97,10 @@ We also introduce our novel method to use freq-LoRA for finetuning AST.
 Full fine-tuning (FFT) adapts the entire pre-trained model to each downstream task \cite{xu2023parameter}. This approach ensures optimal performance by adjusting all model parameters, but it requires significant computational resources and storage. Fine-tuning the full model is often impractical for resource-constrained environments, particularly in multi-task learning scenarios where maintaining separate models for each task becomes infeasible.
 
 \subsubsection{Pref-T 24 (Prefix-Tuning)}
-Prefix-tuning inserts a set of $p$ learnable continuous embeddings of dimension $d$ (i.e., prompts) into the keys and values of the MHSA block at every layer. Pref-T 24 follows the deep prompt-tuning (DPT) paradigm, where prompts are uniformly prepended to each transformer layer instead of just the first layer, as in shallow prompt-tuning (SPT). By strategically placing the prefix embeddings throughout the network, Pref-T 24 enhances the model’s ability to generalize across tasks while maintaining parameter efficiency.
+Prefix-tuning inserts a set of $p$ learnable continuous embeddings of dimension $d$ (i.e., prompts) into the keys and values of the MHSA block at every layer \cite{li2021prefix}. Pref-T 24 follows the deep prompt-tuning (DPT) paradigm, where prompts are uniformly prepended to each transformer layer instead of just the first layer, as in shallow prompt-tuning (SPT). By strategically placing the prefix embeddings throughout the network, Pref-T 24 enhances the model’s ability to generalize across tasks while maintaining parameter efficiency.
 
 \subsubsection{Linear Probing}
-Linear probing is a lightweight fine-tuning method where only the classification head (i.e., the final linear layer) of the pre-trained model is updated, while the rest of the model remains frozen. This approach significantly reduces computational cost and prevents catastrophic forgetting by preserving the original model’s learned representations.
+Linear probing is a lightweight fine-tuning method where only the classification head (i.e., the final linear layer) of the pre-trained model is updated, while the rest of the model remains frozen \cite{kumar2022finetuning}. This approach significantly reduces computational cost and prevents catastrophic forgetting by preserving the original model’s learned representations.
 
 Given an input sequence $X_{\text{in}}$, the output of the frozen transformer layers is represented as:
 
@@ -114,10 +114,10 @@ A task-specific linear classification head $W_{\text{lin}} \in \mathbb{R}^{d \ti
 \hat{y} = X_{\text{out}} W_{\text{lin}}
 \end{equation}
 
-Although linear probing is highly efficient and requires only a small number of trainable parameters, its performance is often inferior to other PETL methods such as LoRA or adapter-based tuning, especially for tasks requiring deeper model adaptation. However, it remains a strong baseline for transfer learning scenarios where computational resources are limited.
+Although linear probing is highly efficient and requires only a small number of trainable parameters, its performance is often inferior to other PETL methods such as LoRA or adapter-based tuning, especially for tasks requiring deeper model adaptation. Its effectiveness strongly depends on the quality and task-relevance of the representations produced by the foundation model. Nevertheless, linear probing remains a strong baseline for transfer learning scenarios where computational resources are limited.
 
 \subsubsection{LoRA (Low-Rank Adaptation)}
-LoRA introduces trainable low-rank matrices into transformer layers to approximate the weight updates. For a pre-trained weight matrix $W \in \mathbb{R}^{d \times d_k}$, LoRA represents its update with a low-rank decomposition $W + \Delta W = W + AB$, where $A \in \mathbb{R}^{d \times r}$, $B \in \mathbb{R}^{r \times d}$, and $r \ll d$. LoRA typically applies this update to the query and value projection matrices, $W_q$ and $W_v$, in the Multi-Head Self-Attention (MHSA) sub-layer. The computation of query and value matrices follows:
+LoRA introduces trainable low-rank matrices into transformer layers to approximate the weight updates \cite{hu2021lora}. For a pre-trained weight matrix $W \in \mathbb{R}^{d \times d_k}$, LoRA represents its update with a low-rank decomposition $W + \Delta W = W + AB$, where $A \in \mathbb{R}^{d \times r}$, $B \in \mathbb{R}^{r \times d}$, and $r \ll d$. LoRA typically applies this update to the query and value projection matrices, $W_q$ and $W_v$, in the Multi-Head Self-Attention (MHSA) sub-layer. The computation of query and value matrices follows:
 
 \begin{equation}
 Q/V = X_{\text{in}} W_{q/v} + s \cdot X_{\text{in}} A_{q/v} B_{q/v}
@@ -126,17 +126,16 @@ Q/V = X_{\text{in}} W_{q/v} + s \cdot X_{\text{in}} A_{q/v} B_{q/v}
 where $s$ is a tunable scalar hyperparameter. This method allows efficient adaptation of the pre-trained model by introducing a minimal number of trainable parameters, thereby reducing storage requirements.
 
 \subsubsection{Conformer Adapter: Pfeiffer Configuration}
-Adapters are small, trainable modules inserted into transformer layers. They employ a bottleneck structure to minimize additional parameters while still enabling task-specific adaptation. Specifically, the hidden representation of dimension $d$ is first down-projected to a smaller dimension $r$, then passed through a non-linear transformation, and finally up-projected back to $d$. Formally, for a transformer layer output $X_{\text{FF}}$ from the feed-forward (FF) block and a residual connection $X̂$, the Pfeiffer configuration places an adapter \emph{after} the FF block:
+Adapters are small, trainable modules inserted into transformer layers \cite{he2021towards}. They employ a bottleneck structure to minimize additional parameters while still enabling task-specific adaptation. Specifically, the hidden representation of dimension $d$ is first down-projected to a smaller dimension $r$, then passed through a non-linear transformation, and finally up-projected back to $d$. Formally, for a transformer layer output $X_{\text{FF}}$ from the feed-forward (FF) block and a residual connection $X̂$, the Pfeiffer configuration places an adapter \emph{after} the FF block:
 \begin{equation}
 X_{\text{out}} \;=\; X̂ \;+\; X_{\text{FF}} \;+\; f\bigl(X̂\,W_{\text{down}}\bigr)\,W_{\text{up}},
 \end{equation}
 where $W_{\text{down}} \in \mathbb{R}^{d \times r}$ and $W_{\text{up}} \in \mathbb{R}^{r \times d}$, and $f(\cdot)$ is a non-linear activation function (e.g., ReLU). 
 
 \paragraph{Motivation for Integrating Convolution.}
-While a purely linear bottleneck adapter can be effective, it may struggle to capture local and contextual information in speech or audio tasks. Hence, we integrate a lightweight convolution module inspired by Conformer, retaining the Pfeiffer placement scheme to keep the number of additional parameters low.
+While a purely linear bottleneck adapter can be effective, it may struggle to capture local and contextual information in speech or audio tasks. Hence, a lightweight convolution module inspired by Conformer, retaining the Pfeiffer placement scheme to keep the number of additional parameters low.
 
-\subsubsection{Proposed Conformer Adapter}
-To better model local dependencies while preserving the bottleneck design, we replace the simple down-up linear layers with a \textbf{depthwise convolution} module from the Conformer architecture. This design greatly enhances performance on speech and audio tasks:
+To better model local dependencies while preserving the bottleneck design, replacing the simple down-up linear layers with a \textbf{depthwise convolution} module from the Conformer architecture. This design greatly enhances performance on speech and audio tasks:
 
 \begin{enumerate}
     \item \textbf{Pointwise Down Convolution}: The input $X̂$ is projected to a hidden dimension of $2r$. 
@@ -145,7 +144,7 @@ To better model local dependencies while preserving the bottleneck design, we re
     \item \textbf{Pointwise Up Convolution}: Finally, we project the hidden representation back to dimension $d$.
 \end{enumerate}
 
-Placed after the FF block (as in Pfeiffer), the Conformer Adapter can significantly improve performance on challenging audio or speech tasks. By leveraging depthwise convolutions in a bottleneck structure, our proposed approach offers notable gains over purely linear adapters, yet still requires only a fraction of the parameters used in full fine-tuning.
+Placed after the FF block (as in Pfeiffer), the Conformer Adapter can significantly improve performance on challenging audio or speech tasks.
 
 
 \begingroup

@@ -171,7 +171,7 @@ Best and second-best performances for each dataset are coloured in
 \toprule
 \textbf{Method} & \textbf{Par} & \cellcolor{pastelyellow}\textbf{ESC} & \cellcolor{lightgray}\textbf{US8K}\\
 \midrule
-FFT &  85M & 87.50 & 83.08\\
+FFT &  85M & \cellcolor{pinksecondbest}87.50 & 83.08\\
 Linear     & 9/40K   & 74.64      & 76.67\\
 \hline \addlinespace
 Pref-T 24  & 221K    & 82.75      & 81.11\\ 
@@ -180,7 +180,7 @@ LoRA       & 221K    & 85.80      & \cellcolor{pinksecondbest}84.12\\
 \rowcolor{pastelviolet}
 \multicolumn{4}{l}{\textbf{Conformer Adapter}}\\
 \hline \addlinespace
-Pfeiffer   & 271K    & \cellcolor{pinksecondbest}87.30 & \cellcolor{teagreen}\textbf{79.25}\\
+Pfeiffer   & 271K    & \cellcolor{teagreen}87.30 & \cellcolor{teagreen}\textbf{79.25}\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -188,98 +188,35 @@ Pfeiffer   & 271K    & \cellcolor{pinksecondbest}87.30 & \cellcolor{teagreen}\te
 
 
 \section{Experiments}
-\subsection{ Implementation Details}
-\textbf{Datasets}. We evaluate the PETL methods on two audio downstream classification tasks.  \textbf{Audio classification}: we use the ESC-50 and UrbanSound8K (US8K) datasets. ESC-50 (ESC) \cite{piczak2015esc} consists of $2,000$ 5-second-long environmental audio recordings of $50$ classes. US8K \cite{salamon2014dataset} includes $8,732$ labeled sound excerpts of urban sounds from $10$ classes.
+\subsection{Implementation Details}
 
-\textbf{Baselines}. We include the \textit{full fine-tuning} method (FFT), which finetunes the full pre-trained AST model; and \textit{linear probing}, which only fine-tunes the classification head. We then study various PETL methods: shallow prompt-tuning (SPT), deep prompt-tuning (DPT), prefix-tuning (Pref-T), and BitFit \cite{zaken2021bitfit}, which is a common baseline that fine-tunes only the bias terms of the pre-trained
-backbone. SPT adds all the $300$ prompts to the input of the first transformer layer, whereas DPT adds $25$ prompts to each transformer layer. We then include LoRA and bottleneck and conformer (ours) adapters. The dimension of the intermediate space for adapters and LoRA is $r = d/\text{RR}$, where $d = 768$ is the hidden dimension of the AST model and RR is the reduction rate. Unless otherwise stated, $r$ is set to $12$, $8$, and $6$ for bottleneck adapter, conformer, and LoRA, respectively. In this way, the resulting number of parameters is roughly the same. For LoRA, following \cite{hu2021lora}, the scaling factor is set to $s = \alpha/\text{RR}$, where $\alpha$ = 16 leads to the best results (i.e., $s = 8$). We also note that each adapter module is added in parallel to only the MHSA layer (Pfeiffer) or both the MHSA and FF layers (Houslby). For this reason, Houlsby adapters require twice as many parameters as Pfeiffer. Inserting the adapters sequentially leads to slightly worse results, yet we do not include these results for lack of space. Finally, for the speech tasks we set the kernel size of the depthwise convolution layer to 31, which is the original value proposed in \cite{conformer}, while for audio tasks we found that $k = 8$ gives the best results (we refer the reader to Section \ref{sec:ablations} for a detailed analysis). 
+\textbf{Datasets}. We evaluate the PETL methods on two widely used environmental sound classification benchmarks: ESC-50 and UrbanSound8K (US8K). ESC-50 (ESC) \cite{piczak2015esc} consists of 2,000 five-second-long audio recordings spanning 50 everyday acoustic events (e.g., dog barking, footsteps). US8K \cite{salamon2014dataset} includes 8,732 short audio excerpts (up to four seconds each) from 10 urban sound categories (e.g., sirens, drilling). Both datasets present significant background noise and intra-class variability, making them suitable for evaluating model robustness and generalization.
+
+\textbf{Evaluation Metric}. We use classification accuracy as the primary evaluation metric, defined as:
+\begin{equation}
+    \text{Accuracy} = \frac{\text{Number of correct predictions}}{\text{Total number of predictions}}.
+\end{equation}
+
+\textbf{Validation Protocol}. For ESC-50, we use 5-fold cross-validation and report the average accuracy across the folds. For US8K, we follow the standard protocol and evaluate using 3 folds instead of the 10 official folds, because of computation limits,  and report the average accuracy across the folds. In $k$-fold cross-validation, the dataset is divided into $k$ equal parts; the model is trained on $k-1$ parts and tested on the remaining part, iteratively, ensuring each part is used as a test set exactly once.
+
+
 
 \textbf{Computational Setup and Challenges.} Initially, we trained our models using the university's SLURM-based cluster. However, due to memory constraints, we had to significantly reduce the batch size to fit the model into the available resources. This led to suboptimal convergence and degraded performance. To overcome these limitations, we migrated to Google Colab with an A100 GPU, allowing for larger batch sizes and more stable training. Nonetheless, the performance remained unsatisfactory until we carefully tuned the Reduction Ratio (RR) of the adapters. We observed that increasing RR from 64 to 96 significantly improved accuracy, suggesting that higher compression levels helped regularize the model and reduce overfitting. This highlights the importance of proper RR selection when applying PETL methods to AST-based models.
-\subsection{Citations}
 
 
-
-Table~\ref{citation-guide} shows the syntax supported by the style files.
-We encourage you to use the natbib styles.
-You can use the command \verb|\citet| (cite in text) to get ``author (year)'' citations, like this citation to a paper by \citet{Gusfield:97}.
-You can use the command \verb|\citep| (cite in parentheses) to get ``(author, year)'' citations \citep{Gusfield:97}.
-You can use the command \verb|\citealp| (alternative cite without parentheses) to get ``author, year'' citations, which is useful for using citations within parentheses (e.g. \citealp{Gusfield:97}).
-
-\subsection{References}
-
-\nocite{Ando2005,augenstein-etal-2016-stance,andrew2007scalable,rasooli-tetrault-2015,goodman-etal-2016-noise,harper-2014-learning}
-
-The \LaTeX{} and Bib\TeX{} style files provided roughly follow the American Psychological Association format.
-If your own bib file is named \texttt{custom.bib}, then placing the following before any appendices in your \LaTeX{} file will generate the references section for you:
-\begin{quote}
-\begin{verbatim}
-\bibliographystyle{acl_natbib}
-\bibliography{custom}
-\end{verbatim}
-\end{quote}
-You can obtain the complete ACL Anthology as a Bib\TeX{} file from \url{https://aclweb.org/anthology/anthology.bib.gz}.
-To include both the Anthology and your own .bib file, use the following instead of the above.
-\begin{quote}
-\begin{verbatim}
-\bibliographystyle{acl_natbib}
-\bibliography{anthology,custom}
-\end{verbatim}
-\end{quote}
-Please see Section~\ref{sec:bibtex} for information on preparing Bib\TeX{} files.
-
-\subsection{Appendices}
-
-Use \verb|\appendix| before any appendix section to switch the section numbering over to letters. See Appendix~\ref{sec:appendix} for an example.
-
-\section{Bib\TeX{} Files}
-\label{sec:bibtex}
-
-Unicode cannot be used in Bib\TeX{} entries, and some ways of typing special characters can disrupt Bib\TeX's alphabetization. The recommended way of typing special characters is shown in Table~\ref{tab:accents}.
-
-Please ensure that Bib\TeX{} records contain DOIs or URLs when possible, and for all the ACL materials that you reference.
-Use the \verb|doi| field for DOIs and the \verb|url| field for URLs.
-If a Bib\TeX{} entry has a URL or DOI field, the paper title in the references section will appear as a hyperlink to the paper, using the hyperref \LaTeX{} package.
 
 \section*{Limitations}
-ACL 2023 requires all submissions to have a section titled ``Limitations'', for discussing the limitations of the paper as a complement to the discussion of strengths in the main text. This section should occur after the conclusion, but before the references. It will not count towards the page limit.
-The discussion of limitations is mandatory. Papers without a limitation section will be desk-rejected without review.
-
-While we are open to different types of limitations, just mentioning that a set of results have been shown for English only probably does not reflect what we expect. 
-Mentioning that the method works mostly for languages with limited morphology, like English, is a much better alternative.
-In addition, limitations such as low scalability to long text, the requirement of large GPU resources, or other things that inspire crucial further investigation are welcome.
-
-\section*{Ethics Statement}
-Scientific work published at ACL 2023 must comply with the ACL Ethics Policy.\footnote{\url{https://www.aclweb.org/portal/content/acl-code-ethics}} We encourage all authors to include an explicit ethics statement on the broader impact of the work, or other ethical considerations after the conclusion but before the references. The ethics statement will not count toward the page limit (8 pages for long, 4 pages for short papers).
 
 \section*{Acknowledgements}
-This document has been adapted by Jordan Boyd-Graber, Naoaki Okazaki, Anna Rogers from the style files used for earlier ACL, EMNLP and NAACL proceedings, including those for
-EACL 2023 by Isabelle Augenstein and Andreas Vlachos,
-EMNLP 2022 by Yue Zhang, Ryan Cotterell and Lea Frermann,
-ACL 2020 by Steven Bethard, Ryan Cotterell and Rui Yan,
-ACL 2019 by Douwe Kiela and Ivan Vuli\'{c},
-NAACL 2019 by Stephanie Lukin and Alla Roskovskaya, 
-ACL 2018 by Shay Cohen, Kevin Gimpel, and Wei Lu, 
-NAACL 2018 by Margaret Mitchell and Stephanie Lukin,
-Bib\TeX{} suggestions for (NA)ACL 2017/2018 from Jason Eisner,
-ACL 2017 by Dan Gildea and Min-Yen Kan, NAACL 2017 by Margaret Mitchell, 
-ACL 2012 by Maggie Li and Michael White, 
-ACL 2010 by Jing-Shin Chang and Philipp Koehn, 
-ACL 2008 by Johanna D. Moore, Simone Teufel, James Allan, and Sadaoki Furui, 
-ACL 2005 by Hwee Tou Ng and Kemal Oflazer, 
-ACL 2002 by Eugene Charniak and Dekang Lin, 
-and earlier ACL and EACL formats written by several people, including
-John Chen, Henry S. Thompson and Donald Walker.
-Additional elements were taken from the formatting instructions of the \emph{International Joint Conference on Artificial Intelligence} and the \emph{Conference on Computer Vision and Pattern Recognition}.
 
-% Entries for the entire Anthology, followed by custom entries
-\bibliography{anthology,custom}
-\bibliographystyle{acl_natbib}
+We would like to thank our lecturer, Tal Rosenwein Kariboy
+, for introducing us to deep learning and deep learning on audio processing. The methods we learned in this course have already proven useful in other domains we work in. We are grateful for your dedication and effort throughout the course.
 
-\appendix
 
-\section{Example Appendix}
-\label{sec:appendix}
+\subsection{References}
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{custom}
 
-This is a section in the appendix.
+
 
 \end{document}

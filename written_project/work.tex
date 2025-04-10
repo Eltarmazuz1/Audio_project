@@ -84,12 +84,18 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-
+We explore parameter-efficient transfer learning (PETL) methods for Audio Spectrogram Transformers (AST) on environmental sound classification tasks. We evaluate established techniques like LoRA, Prefix-Tuning, adapters, and linear probing alongside our novel Freq-LoRA approach, which incorporates frequency-domain transformations into low-rank adaptation. Experiments on ESC-50 and UrbanSound8K datasets demonstrate that Pfeiffer adapters achieve comparable performance to full fine-tuning (87.30\% vs 87.50\% on ESC-50) while using only 0.3\% of trainable parameters. Our results provide insights into effective deployment strategies for audio transformers in resource-constrained environments.
 \end{abstract}
 
 \section{Introduction}
+The emergence of transformer architectures has revolutionized deep learning across multiple domains, with Audio Spectrogram Transformers (AST) showing particular promise for audio classification tasks. However, the computational demands of fine-tuning large transformer models present significant barriers to deployment in resource-constrained environments. Parameter-efficient transfer learning (PETL) methods address this challenge by adapting pre-trained models with minimal parameter updates. In this work, we systematically evaluate various PETL techniques for AST models on environmental sound classification, including LoRA \cite{hu2021lora}, Prefix-Tuning \cite{li2021prefix}, linear probing \cite{kumar2022finetuning}, and adapter-based methods \cite{he2021towards}. We also introduce Freq-LoRA, a novel approach that enhances standard LoRA with learnable frequency-domain transformations to better capture spectral characteristics in audio data. Our experimental results demonstrate that carefully designed PETL methods can achieve performance competitive with full fine-tuning while using orders of magnitude fewer parameters, enabling efficient deployment across multiple audio classification scenarios.
 
-
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1.2\linewidth]{freq_image.png}
+    \caption{Illustration of the Freq-LoRA architecture. The method first applies LoRA, followed by a learnable frequency-domain transformation using FFT, complex-valued filtering, and inverse FFT, plus scaling-shifting and residual addition.}
+    \label{fig:freq-lora}
+\end{figure}
 \section{Related Work}
 One of the big breakthroughs in deep learning for vision tasks was the introduction of the Vision Transformer (ViT) \cite{dosovitskiy2020image}, which builds upon the transformer architecture \cite{vaswani2017attention}. Unlike convolutional neural networks (CNNs), ViT processes images as sequences of patches, leveraging self-attention mechanisms to model long-range dependencies across an image. This shift in paradigm has led to competitive or superior performance compared to CNNs, especially when trained on large datasets. ViT’s success has also extended beyond vision, inspiring models such as the Audio Spectrogram Transformer (AST) for audio classification, demonstrating the versatility of transformer-based architectures in various modalities \cite{gong2021ast}.
 
@@ -152,12 +158,6 @@ To better model local dependencies while preserving the bottleneck design, repla
 \end{enumerate}
 
 Placed after the FF block (as in Pfeiffer), the Conformer Adapter can significantly improve performance on challenging audio or speech tasks.
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=1.2\linewidth]{freq_image.png}
-    \caption{Illustration of the Freq-LoRA architecture. The method first applies LoRA, followed by a learnable frequency-domain transformation using FFT, complex-valued filtering, and inverse FFT, plus scaling-shifting and residual addition.}
-    \label{fig:freq-lora}
-\end{figure}
 
 \subsubsection{Freq-LoRA (Frequency-Aware Low-Rank Adaptation)}
 
@@ -166,6 +166,23 @@ Freq-LoRA is a novel fine-tuning method that combines the efficiency of low-rank
 \begin{equation} \hat{X} = \text{IFFT}(K \odot \text{FFT}(X)) \cdot \alpha + \beta + X \end{equation}
 
 where $K$ is a learnable complex-valued filter, and $\alpha, \beta \in \mathbb{R}^d$ are learnable scale and shift parameters. This integration allows Freq-LoRA to capture both spatial and spectral dependencies, improving the model's ability to adapt to fine-grained patterns and high-frequency information. Extensive empirical results show that Freq-LoRA outperforms baseline LoRA and other PEFT methods across a variety of tasks, especially in low-resource or domain-shifted scenarios.
+
+
+\section{Experiments}
+\subsection{Implementation Details}
+
+\textbf{Datasets}. We evaluate the PETL methods on two widely used environmental sound classification benchmarks: ESC-50 and UrbanSound8K (US8K). ESC-50 (ESC) \cite{piczak2015esc} consists of 2,000 five-second-long audio recordings spanning 50 everyday acoustic events (e.g., dog barking, footsteps). US8K \cite{salamon2014dataset} includes 8,732 short audio excerpts (up to four seconds each) from 10 urban sound categories (e.g., sirens, drilling). Both datasets present significant background noise and intra-class variability, making them suitable for evaluating model robustness and generalization.
+
+\textbf{Evaluation Metric}. We use classification accuracy as the primary evaluation metric, defined as:
+\begin{equation}
+    \text{Accuracy} = \frac{\text{Number of correct predictions}}{\text{Total number of predictions}}.
+\end{equation}
+
+\textbf{Validation Protocol}. For ESC-50, we use 5-fold cross-validation and report the average accuracy across the folds. For US8K, we follow the standard protocol and evaluate using 3 folds instead of the 10 official folds, because of computation limits,  and report the average accuracy across the folds. In $k$-fold cross-validation, the dataset is divided into $k$ equal parts; the model is trained on $k-1$ parts and tested on the remaining part, iteratively, ensuring each part is used as a test set exactly once.
+
+
+
+\textbf{Computational Setup and Challenges.} Initially, we trained our models using the university's SLURM-based cluster. However, due to memory constraints, we had to significantly reduce the batch size to fit the model into the available resources. This led to suboptimal convergence and degraded performance. To overcome these limitations, we migrated to Google Colab with an A100 GPU, allowing for larger batch sizes and more stable training. Nonetheless, the performance remained unsatisfactory until we carefully tuned the Reduction Ratio (RR) of the adapters. We observed that increasing RR from 64 to 96 significantly improved accuracy, suggesting that higher compression levels helped regularize the model and reduce overfitting. This highlights the importance of proper RR selection when applying PETL methods to AST-based models.
 
 \begingroup
 \setlength{\tabcolsep}{3.3pt}
@@ -188,6 +205,8 @@ Linear     & 9/40K   & 74.64      & 76.67\\
 Pref-T 24  & 221K    & 82.75      & 81.11\\ 
 LoRA       & 221K    & 85.80      & \cellcolor{pinksecondbest}84.12\\
 \hline
+Freq-LoRA & 221K & 63.20 & xx \\
+\hline
 \rowcolor{pastelviolet}
 \multicolumn{4}{l}{\textbf{Conformer Adapter}}\\
 \hline \addlinespace
@@ -198,25 +217,18 @@ Pfeiffer   & 271K    & \cellcolor{teagreen}87.30 & 81.60\\
 \endgroup
 
 
-\section{Experiments}
-\subsection{Implementation Details}
+\textbf{Results.} Table~\ref{tab:main} summarizes the performance of various PETL methods applied to AST on the ESC and US8K datasets. The full fine-tuning baseline (FFT) achieves the highest accuracy on US8K (83.08\%) and the second-best on ESC (87.50\%). Among the PETL methods, Pfeiffer obtains the highest score on ESC (87.30\%) and competitive performance on US8K (81.60\%). LoRA achieves the second-best result on US8K (84.12\%) while Pref-T and Linear baselines show moderate performance across both datasets. The Freq-LoRA method shows a notable drop in accuracy on ESC (63.20\%), and its US8K score is not reported.
 
-\textbf{Datasets}. We evaluate the PETL methods on two widely used environmental sound classification benchmarks: ESC-50 and UrbanSound8K (US8K). ESC-50 (ESC) \cite{piczak2015esc} consists of 2,000 five-second-long audio recordings spanning 50 everyday acoustic events (e.g., dog barking, footsteps). US8K \cite{salamon2014dataset} includes 8,732 short audio excerpts (up to four seconds each) from 10 urban sound categories (e.g., sirens, drilling). Both datasets present significant background noise and intra-class variability, making them suitable for evaluating model robustness and generalization.
+\paragraph{Analysing Results.} 
+Our reproduced results may differ slightly from the original benchmarks due to differences in fold splits during $k$-fold cross-validation. Since different data partitions can lead to variations in validation performance, minor discrepancies are expected. Additionally, in our Freq-LoRA implementation, we adjusted the frequency adaptation module to handle non-square input dimensions. However, we observed that this leads to noticeably poorer performance, likely because our adjustment interpolates the data.
 
-\textbf{Evaluation Metric}. We use classification accuracy as the primary evaluation metric, defined as:
-\begin{equation}
-    \text{Accuracy} = \frac{\text{Number of correct predictions}}{\text{Total number of predictions}}.
-\end{equation}
-
-\textbf{Validation Protocol}. For ESC-50, we use 5-fold cross-validation and report the average accuracy across the folds. For US8K, we follow the standard protocol and evaluate using 3 folds instead of the 10 official folds, because of computation limits,  and report the average accuracy across the folds. In $k$-fold cross-validation, the dataset is divided into $k$ equal parts; the model is trained on $k-1$ parts and tested on the remaining part, iteratively, ensuring each part is used as a test set exactly once.
+\section{Future Work.}  
+The current implementation of Freq-LoRA introduces a frequency adaptation mechanism that interpolates inputs to manage non-square representations. While this allows for broader applicability, it appears to compromise performance. Future work will explore more principled strategies for frequency-domain adaptation that preserve spatial integrity, such as learnable reparameterizations or padding-based approaches instead of interpolation. Additionally, integrating Freq-LoRA more tightly with other PETL paradigms---such as prefixed tokens in Prefix-Tuning or the adapter injection strategies of Pfeiffer---may help harmonize its behavior and improve downstream performance. A unified framework that adapts to both temporal and frequency-specific cues across various PETL methods could offer more robust generalization and better performance consistency across diverse audio tasks.
 
 
-
-\textbf{Computational Setup and Challenges.} Initially, we trained our models using the university's SLURM-based cluster. However, due to memory constraints, we had to significantly reduce the batch size to fit the model into the available resources. This led to suboptimal convergence and degraded performance. To overcome these limitations, we migrated to Google Colab with an A100 GPU, allowing for larger batch sizes and more stable training. Nonetheless, the performance remained unsatisfactory until we carefully tuned the Reduction Ratio (RR) of the adapters. We observed that increasing RR from 64 to 96 significantly improved accuracy, suggesting that higher compression levels helped regularize the model and reduce overfitting. This highlights the importance of proper RR selection when applying PETL methods to AST-based models.
-
-
-
-\section*{Limitations}
+\section*{Limitations \& Broader Impact}
+Our research enables the use of a single AST model with thinner adjustments for different scenarios. Future applications can enable deployment on resource-constrained edge devices, allowing multiple adjustments without duplicating the AST each time. For example, this approach could benefit hearing aids and similar devices.
+No risks have been identified from this technology.
 
 \section*{Acknowledgements}
 

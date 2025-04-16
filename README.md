@@ -32,7 +32,7 @@ Download and extract the UrbanSound8K dataset:
 RUNNING EXAMPLES 
 ------------------------------------------------------
 
-methods: 'linear', 'full-FT', 'adapter', 'prompt-tuning', 'prefix-tuning', 'LoRA', 'LoRA_freq'
+methods: 'linear', 'full-FT', 'adapter', 'prefix-tuning', 'LoRA', 'LoRA_freq'
 
 1. Full Fine-Tuning on UrbanSound8K:
 
